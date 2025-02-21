@@ -1,86 +1,102 @@
 package com.demo.demo;
 
 import java.io.*;
-
+import java.net.*;
 import jakarta.servlet.http.*;
 import jakarta.servlet.annotation.*;
-//Used materials:
-//https://www.tutorialspoint.com/servlets/servlets-form-data.htm
-//https://www.youtube.com/watch?v=-SiJypBbO3M&list=PLfu_Bpi_zcDOn8ajnuLY6g1C6hc_eeDFl&index=4
-//https://www.youtube.com/watch?v=DZdtFlLi_I4&list=PLfu_Bpi_zcDOn8ajnuLY6g1C6hc_eeDFl&index=3
-//https://www.youtube.com/watch?v=UiBtz7rZ6Ec&list=PLfu_Bpi_zcDOn8ajnuLY6g1C6hc_eeDFl&index=2
-//https://www.youtube.com/watch?v=0FpLve7ffoY&list=PLfu_Bpi_zcDOn8ajnuLY6g1C6hc_eeDFl&index=1
-//https://www.sitepoint.com/community/t/form-checkbox-submit-to-servlet/2264
-//https://www.youtube.com/watch?v=F1tx1O195as
-//ChatGPT
+import org.json.JSONObject;
+import java.net.URI;//better use URI and then convert to URL
 
-@WebServlet(name = "helloServlet", value = "/hello-servlet")
+import java.util.logging.Logger;
+
+@WebServlet(name = "helloServlet", value = "/HelloServlet")
 public class HelloServlet extends HttpServlet {
-    public void init() {
-    }
-    //Method to handle GET method request
-    public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        response.setContentType("text/html");
+    //For logging if error occurs
+    private static final Logger logger = Logger.getLogger(HelloServlet.class.getName());
 
-        PrintWriter out = response.getWriter();
-        out.println("<html><body>");
-        out.println("<h1>Currency Converter</h1>");
+    private double fetchExchangeRate(String inputCurrency, String outputCurrency) {
+        String responseStr;
+        HttpURLConnection connection = null;
+        try {
+            String API_KEY = "6519ef42200cea38fec7e886";
+            String urlStr = "https://v6.exchangerate-api.com/v6/" + API_KEY + "/latest/" + inputCurrency;
+            URL url;
+            try{
+                url = new URI(urlStr).toURL();
+                connection = (HttpURLConnection) url.openConnection();
+            } catch (URISyntaxException e) {
+                logger.severe("URI syntax exception: Invalid URL format");
+                return -1;
+            }
+            connection.setRequestMethod("GET");
 
-        //Input Currency Selection (using radio buttons)
-        out.println("<form action=\"hello-servlet\" method=\"POST\">");
-
-        //Getting the Amount
-        out.println("<p>Enter amount: </p>");
-        out.println("<input type=\"text\" name=\"CurrencyNum\" size=\"10\">");
-        out.println("<br>");
-
-        //Getting Currency
-        out.println("<br><p>Select entered amount currency</p>");
-        out.println("<input type=\"radio\" name=\"InputCurrency\" value=\"USD\">USD <br>");
-        out.println("<input type=\"radio\" name=\"InputCurrency\" value=\"EUR\">EUR <br>");
-        out.println("<input type=\"radio\" name=\"InputCurrency\" value=\"GBP\">GBP <br>");
-        out.println("<input type=\"radio\" name=\"InputCurrency\" value=\"YEN\">YEN <br>");
-        out.println("<input type=\"radio\" name=\"InputCurrency\" value=\"YUAN\">YUAN <br>");
-
-        //Output Currency Selection (using checkbox buttons)
-        out.println("<p>Select currency you wish to convert to:</p>");
-        out.println("<input type=\"checkbox\" name=\"OutputCurrency\" value=\"USD\">USD <br>");
-        out.println("<input type=\"checkbox\" name=\"OutputCurrency\" value=\"EUR\">EUR <br>");
-        out.println("<input type=\"checkbox\" name=\"OutputCurrency\" value=\"GBP\">GBP <br>");
-        out.println("<input type=\"checkbox\" name=\"OutputCurrency\" value=\"YEN\">YEN <br>");
-        out.println("<input type=\"checkbox\" name=\"OutputCurrency\" value=\"YUAN\">YUAN <br>");
-
-        //Submit
-        out.println("<input type=\"submit\" value=\"Submit\">");
-        out.println("</form>");
-
-        out.println("</body></html>");
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                responseStr = response.toString();
+            }
+        } catch (MalformedURLException e) {
+            logger.severe("MalformedURLException: " + e.getMessage());
+            return -1;
+        } catch (ProtocolException e) {
+            logger.severe("ProtocolURLException: " + e.getMessage());
+            return -1;
+        } catch (IOException e) {
+            logger.severe("IOException: " + e.getMessage());
+            return -1;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+        try {
+            JSONObject jsonObject = new JSONObject(responseStr); //Parse JSON response
+            JSONObject rates = jsonObject.getJSONObject("conversion_rates"); //Extract conversion rates
+            return rates.getDouble(outputCurrency); //Get the rate for output currency
+        } catch (org.json.JSONException e) {
+            logger.severe("JSONException: " + e.getMessage());
+            return -1;
+        }
     }
     //Method to handle POST method request
     public void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-    String InputCurrency = request.getParameter("InputCurrency");
-    String[] OutputCurrency = request.getParameterValues("OutputCurrency");
-    String CurrencyNum = request.getParameter("CurrencyNum");
+        response.setContentType("text/plain");
+        PrintWriter out = response.getWriter();
 
-    response.setContentType("text/html");
-    PrintWriter out = response.getWriter(); //Simplifying
-    out.println("<html><body>");
-    if (InputCurrency != null) {
-        out.println("<h3>Entered Currency " + InputCurrency + " and amount " + CurrencyNum + " </h3>");
-        out.println("<h3>---------------------------------------------------</h3>");
-        for (String currency : OutputCurrency) {
-            if (currency != null) {
-                out.println("<h3>Converted to " + currency + " which equals to  " + CurrencyNum + "\n</h3>");
-            }
+        String amountStr = request.getParameter("Amount");
+        String inputCurrency = request.getParameter("InputCurrency");
+        String outputCurrency = request.getParameter("OutputCurrency");
+
+        if (inputCurrency != null){
+            out.print("You have entered " + inputCurrency + " currency and ");
         }
-    }
-    else{out.println("<h3>Input currency was not chosen, please click done and try again</h3><br>");}
-    out.println("<a href=\"hello-servlet\">Done</a>");
-    out.println("</body></html>");
+        if (outputCurrency != null){
+            out.print("you have entered " + outputCurrency + " currency, ");
+        }
 
-    }
+        if (amountStr == null || inputCurrency == null || outputCurrency == null) {
+            out.println("Error: Missing required parameters.");
+            return;
+        }
 
-
-    public void destroy() {
+        try {
+            double amount = Double.parseDouble(amountStr);
+            if (inputCurrency.equals(outputCurrency)) {
+                out.println("Converted: " + amount + " " + inputCurrency + " = " + amount + " " + outputCurrency);
+                return;
+            }
+            double exchangeRate = fetchExchangeRate(inputCurrency, outputCurrency);
+            if (exchangeRate == -1) {
+                out.println("Error: Unable to retrieve exchange rate.");
+                return;
+            }
+            double convertedAmount = amount * exchangeRate;
+            out.println("Converted: " + amount + " " + inputCurrency + " = " + convertedAmount + " " + outputCurrency);
+        } catch (NumberFormatException e) {
+            out.println("Error: Invalid amount format.");
+        }
     }
 }
